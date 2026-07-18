@@ -13,6 +13,27 @@ transparent: you can see exactly why a note was included.
 
 ==================================================
 
+demo
+----
+
+hatch a fresh vault (banner + spinner → result):
+
+![hatch demo](docs/assets/demo_hatch.gif)
+
+live context view (`sigil tui` — spinner → walk table → idle):
+
+![tui demo](docs/assets/demo_tui.gif)
+
+chat through the vault (thinking → spinner → assembled response):
+
+![chat demo](docs/assets/demo_chat.gif)
+
+the visuals are pure stdlib (truecolor ansi + a braille spinner + a dotted
+"thinking" loop). they animate on a real terminal and fall back to plain
+text when piped. force them with `sigil --ansi`.
+
+==================================================
+
 why not rag
 -----------
 

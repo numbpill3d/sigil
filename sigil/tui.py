@@ -14,9 +14,15 @@ figlet default font.
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from typing import Iterable, Optional
+
+# force-ansi flag: when set, animations + color render even if stdout is not
+# a TTY (used for demo GIF capture). set via tui.FORCE_ANSI = True or the
+# SIGIL_ANSI env var, or `sigil --ansi`.
+FORCE_ANSI = os.environ.get("SIGIL_ANSI", "") not in ("", "0", "false")
 
 # ---- color palette (truecolor ANSI) --------------------------------------
 class C:
@@ -45,7 +51,22 @@ RED = C.fg(255, 110, 110)
 
 
 def _color_on() -> bool:
-    return sys.stdout.isatty()
+    return bool(FORCE_ANSI) or sys.stdout.isatty()
+
+
+# optional frame sink: if set to a list, every rendered screen is appended
+# (used by the demo GIF recorder in tools/makedemo.py). the sink receives
+# the full screen string (with ANSI) for each animation frame.
+FRAME_SINK = None
+
+
+def _emit(screen: str) -> None:
+    """Write a screen to stdout, or capture it if a frame sink is active."""
+    if FRAME_SINK is not None:
+        FRAME_SINK.append(screen)
+    else:
+        sys.stdout.write(screen)
+        sys.stdout.flush()
 
 
 def _pal() -> dict:
@@ -150,7 +171,7 @@ def thinking(label: str = "thinking", seconds: float = 1.2,
              frames: Optional[Iterable[str]] = None) -> None:
     """Show a short 'thinking' animation for `seconds`, then clear the line.
 
-    Non-TTY: prints the label once, no animation.
+    Non-TTY (and no FORCE_ANSI): prints the label once, no animation.
     """
     pal = _pal()
     seq = list(frames) if frames else _DOT_FRAMES
@@ -221,3 +242,19 @@ def walk_table(rows: list) -> str:
 def echo(text: str) -> None:
     sys.stdout.write(text + "\n")
     sys.stdout.flush()
+
+
+# ---- demo frame helpers (pure: return strings, no side effects) ----------
+def spinner_line(label: str, frame: str) -> str:
+    pal = _pal()
+    return f"{pal['b']}{VIOLET}{frame}{pal['reset']} {label}"
+
+
+def thinking_line(label: str, dots: str) -> str:
+    pal = _pal()
+    return f"{pal['b']}{VIOLET}{label} {pal['x']}{dots}{pal['reset']}"
+
+
+def screen(*parts: str) -> str:
+    """Join parts into one screen string (caller adds trailing newline)."""
+    return "\n".join(parts)

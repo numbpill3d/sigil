@@ -237,6 +237,8 @@ def build_parser() -> argparse.ArgumentParser:
     except Exception:
         _ver = "dev"
     p.add_argument("--version", action="version", version=f"sigil {_ver}")
+    p.add_argument("--ansi", action="store_true",
+                   help="force color + animations even when piped (for demos)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     h = sub.add_parser("hatch")
@@ -299,6 +301,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "ansi", False):
+        tui.FORCE_ANSI = True
     cfg = _load_config()
     return args.func(args, cfg)
 
