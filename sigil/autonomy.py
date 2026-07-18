@@ -105,14 +105,43 @@ def halt(vault_root: str, reason: str = "") -> str:
 
 
 # ---- AU2: tier resolution ------------------------------------------------
-def resolve_tier(intent: dict, confidence: Optional[float]) -> str:
-    """Return effective tier. Confidence < threshold forces `ask`."""
+def resolve_tier(intent: dict, confidence: Optional[float], sandbox_active: bool = False) -> str:
+    """Return effective tier. Confidence < threshold forces `ask`.
+
+    `delegate` is only reachable when intent.allowed contains "delegate" AND a
+    sandbox boundary is active (fail-closed: no sandbox -> downgrade to ask).
+    """
     tier = str(intent.get("autonomy", "ask")).lower()
-    if tier not in ("ask", "act"):
+    if tier not in ("ask", "act", "delegate"):
         tier = "ask"
+    if tier == "delegate":
+        allowed = intent.get("allowed", [])
+        if isinstance(allowed, str):
+            allowed = [allowed]
+        if "delegate" not in allowed or not sandbox_active:
+            tier = "ask"
     if confidence is not None and confidence < CONFIDENCE_ASK_THRESHOLD:
         tier = "ask"
     return tier
+
+
+def request_delegate(vault_root: str, name: str, brief: str, intent: dict) -> dict:
+    """Attempt to spawn a delegate. Returns {ok, path?, reason?}.
+
+    Fails closed unless intent allows 'delegate' and a Sandbox is constructed.
+    """
+    allowed = intent.get("allowed", [])
+    if isinstance(allowed, str):
+        allowed = [allowed]
+    if "delegate" not in allowed:
+        return {"ok": False, "reason": "intent does not allow delegate"}
+    from . import sandbox as sandboxmod
+    sb = sandboxmod.Sandbox(vault_root)
+    try:
+        path = sb.spawn(name, brief, gate=None)  # sandbox confinement is the gate
+    except PermissionError as e:
+        return {"ok": False, "reason": str(e)}
+    return {"ok": True, "path": path}
 
 
 # ---- AU3: proposal / approval --------------------------------------------
