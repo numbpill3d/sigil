@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import re
 import time
+import threading
 from typing import Callable, Optional
 
 from . import autonomy as auto
@@ -106,17 +107,26 @@ def run_daemon(
     stop_event=None,
     now_fn: Callable[[], float] = time.time,
     max_iter: Optional[int] = None,
+    watch: bool = False,
 ) -> int:
     """Long-running loop. Returns iteration count.
 
     `stop_event` is a threading.Event (or any object with `.is_set()`); if
     set, the loop exits. `max_iter` bounds iterations for tests. Halt is
-    checked every iteration before running jobs.
+    checked every iteration before running jobs. If `watch=True`, an
+    inotify watcher (P2-6) triggers an immediate rescan on any .md change
+    instead of waiting for `interval`.
     """
+    from . import fsnotify as fsn
+
     vault_root = os.path.realpath(vault_root)
     iterations = 0
+    stop = stop_event or threading.Event()
+    watcher = None
+    if watch:
+        fsn.spawn_watcher([vault_root], lambda _p: None, stop)
     while True:
-        if stop_event is not None and stop_event.is_set():
+        if stop.is_set():
             break
         if auto.is_halted(vault_root):
             break
@@ -124,9 +134,5 @@ def run_daemon(
         iterations += 1
         if max_iter is not None and iterations >= max_iter:
             break
-        if stop_event is not None:
-            # wait but wake on stop
-            stop_event.wait(interval)
-        else:
-            time.sleep(interval)
+        stop.wait(interval)
     return iterations

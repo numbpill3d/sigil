@@ -135,7 +135,7 @@ def cmd_run(args, cfg) -> int:
         stop = threading.Event()
         print(f"daemon running on {target} (interval {args.interval}s). ctrl-c to stop.")
         try:
-            daemonmod.run_daemon(target, interval=args.interval, stop_event=stop)
+            daemonmod.run_daemon(target, interval=args.interval, stop_event=stop, watch=True)
         except KeyboardInterrupt:
             stop.set()
         return 0
