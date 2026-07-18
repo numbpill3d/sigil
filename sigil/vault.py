@@ -156,6 +156,7 @@ class Vault:
                 self.graph.mtimes[f] = current_mtimes[f]
             # unchanged files: keep existing Note objects in graph
             self.graph.revision += 1
+            self._check_drift()
             return self.graph
         # full scan
         self.graph = LinkGraph()
@@ -165,7 +166,21 @@ class Vault:
             self.graph.mtimes[f] = current_mtimes[f]
         self.graph.revision += 1
         self._save_index()
+        self._check_drift()
         return self.graph
+
+    # ---- drift ------------------------------------------------------------
+    def _check_drift(self) -> dict:
+        """Run persona drift detection on every scan (phase-2 P2-5).
+
+        Safe to call always: if persona.md is absent it falls back to default
+        and records a baseline. Returns the drift result dict.
+        """
+        from . import persona as personamod
+        try:
+            return personamod.check_drift(self.root)
+        except Exception:
+            return {"changed": False, "fields": [], "hash": "error", "error": True}
 
     # ---- persistence ------------------------------------------------------
     def _load_index(self) -> bool:
