@@ -43,6 +43,11 @@ TAGMATCH_MULT = 1.1
 CANDIDATE_CAP = 200
 
 
+def _note_created_desc(vault, stem) -> float:
+    n = vault.graph.notes.get(stem)
+    return n.created if n else 0.0
+
+
 @dataclass
 class ScoredNote:
     stem: str
@@ -79,8 +84,7 @@ class ContextAssembler:
     ) -> list[ScoredNote]:
         cache_key = (active_stem, self.vault.graph.revision, task_tag, request_dead, hops, k)
         if cache_key in self._cache:
-            cached = self._cache[cache_key]
-            return cached if not explain else cached
+            return self._cache[cache_key]
         now = time.time() / 86400.0  # days
 
         # BFS over the link graph (forward + backlinks), candidate-capped
@@ -118,7 +122,7 @@ class ContextAssembler:
             )
 
         # tie-break: created desc
-        scored.sort(key=lambda n: (n.score, note_created_desc(self.vault, n.stem)), reverse=True)
+        scored.sort(key=lambda n: (n.score, _note_created_desc(self.vault, n.stem)), reverse=True)
         # token-budget trim
         budget = self.provider.max_context_tokens
         out: list[ScoredNote] = []
@@ -134,8 +138,3 @@ class ContextAssembler:
 
     def invalidate(self) -> None:
         self._cache.clear()
-
-
-def note_created_desc(vault, stem) -> float:
-    n = vault.graph.notes.get(stem)
-    return n.created if n else 0.0

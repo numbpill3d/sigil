@@ -199,7 +199,7 @@ class Vault:
         for stem, stub in data.get("notes", {}).items():
             self.graph.notes[stem] = Note(
                 path=stub["path"], title=stub.get("title", stem),
-                body="", frontmatter=stub.get("frontmatter", {}),
+                body=stub.get("body", ""), frontmatter=stub.get("frontmatter", {}),
                 links=stub.get("links", []), created=stub.get("created", 0.0),
                 half_life=stub.get("half_life", DEFAULT_HALF_LIFE),
                 source=stub.get("source", "agent"),
@@ -214,7 +214,7 @@ class Vault:
         os.makedirs(os.path.dirname(self.index_path), exist_ok=True)
         notes_stub = {
             stem: {
-                "path": n.path, "title": n.title,
+                "path": n.path, "title": n.title, "body": n.body,
                 "frontmatter": n.frontmatter, "links": n.links,
                 "created": n.created, "half_life": n.half_life,
                 "source": n.source, "status": n.status, "autonomy": n.autonomy,

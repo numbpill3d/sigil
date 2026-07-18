@@ -7,13 +7,16 @@ vault as both leash and audit trail.
 AU1 intent contract: intent.md is a CODE-LEVEL allowlist, re-loaded every
   loop and before every write (not read-once-at-boot). Enforced in the
   write path via `sigil.lock.IntentGate`.
-AU2 tiers: ask | act only in v1 (`delegate` needs a sandbox -> phase 2).
+AU2 tiers: ask | act | delegate. `delegate` is gated behind an explicit
+  intent opt-in (`allowed: [delegate]`) AND a sandbox boundary (phase 2, done);
+  without both it downgrades to `ask` (fail-closed).
   confidence < 0.6 -> forced to `ask`.
 AU3 proposal/approval: `act` MUST route through a proposal note; the agent
   polls (mtime + content-hash) and only executes when approval carries
   `source: human` (no self-approval). Kill-switch re-checked before execute.
-AU4 heartbeat stub: `heartbeat_once(schedule)` executes due jobs (note
-  read/write only) on demand. The long-running `--daemon` loop is phase 2.
+AU4 heartbeat: `heartbeat_once(schedule)` executes due jobs (note
+  read/write only) on demand; the long-running `--daemon` loop runs them
+  continuously (phase 2, done).
 AU5 kill-switch: a dedicated `halted`/`tombstoned` sentinel, scan-independent,
   checked every loop and before every write. Distinct from the legitimate
   `ask` state.

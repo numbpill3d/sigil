@@ -116,3 +116,19 @@ def test_note_defaults_and_frontmatter_keys():
         assert "confidence" not in g.notes["b"].__dict__ or True
     finally:
         shutil.rmtree(d)
+
+
+def test_incremental_scan_preserves_bodies():
+    """Regression: unchanged files must keep their body after a cached re-scan."""
+    d = tempfile.mkdtemp()
+    try:
+        _write(d, "a.md", "---\ntitle: A\n---\nhello world body\nlinks [[b]]\n")
+        _write(d, "b.md", "---\ntitle: B\n---\nsecond note body\n")
+        v = Vault(d)
+        v.scan()  # full scan -> writes index with bodies
+        g2 = v.scan()  # incremental: no mtime change -> reuse index
+        # bodies must NOT be empty (the index stores them now)
+        assert g2.notes["a"].body.strip() == "hello world body\nlinks [[b]]"
+        assert g2.notes["b"].body.strip() == "second note body"
+    finally:
+        shutil.rmtree(d)
