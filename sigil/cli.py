@@ -24,13 +24,16 @@ import sys
 
 from . import hatch as hatchmod
 from .vault import Vault
-from .provider import NullProvider, OpenRouterProvider
+from .provider import NullProvider, OpenRouterProvider, ModelProvider
 from .context import ContextAssembler
 from .persona import load_persona
 from . import autonomy as auto
 from . import daemon as daemonmod
+from . import tui as tui
 
 CONFIG_PATH = os.path.expanduser("~/.sigil/config.json")
+
+C_BRAIN = "▰"
 
 
 def _load_config() -> dict:
@@ -47,7 +50,7 @@ def _save_config(cfg: dict) -> None:
     json.dump(cfg, open(CONFIG_PATH, "w", encoding="utf-8"))
 
 
-def _provider(args, cfg) -> object:
+def _provider(args, cfg) -> ModelProvider:
     if args.model or os.environ.get("OPENROUTER_API_KEY"):
         try:
             return OpenRouterProvider(model=args.model or "openai/gpt-4o-mini")
@@ -75,13 +78,16 @@ def cmd_hatch(args, cfg) -> int:
     if not target:
         print("error: --target required", file=sys.stderr)
         return 2
+    tui.echo(tui.banner())
+    tui.echo(tui.rule())
     mode = "fresh" if args.fresh else ("adopt" if args.adopt else "fresh")
-    rep = hatchmod.hatch(target, mode)
+    with tui.Spinner(f"hatching vault ({mode}) -> {target}"):
+        rep = hatchmod.hatch(target, mode)
     cfg["target"] = rep["root"]
     _save_config(cfg)
-    print(f"hatched ({rep.get('mode', mode)}) -> {rep['root']}")
+    tui.note(f"hatched ({rep.get('mode', mode)}) -> {rep['root']}", "g")
     if "copied" in rep:
-        print(f"  copied {len(rep['copied'])} notes, excluded {len(rep['excluded'])}")
+        tui.note(f"copied {len(rep['copied'])} notes, excluded {len(rep['excluded'])}", "x")
     return 0
 
 
@@ -94,17 +100,50 @@ def cmd_chat(args, cfg) -> int:
         print("agent halted (kill-switch active). remove KILLSWITCH.md / intent status.", file=sys.stderr)
         return 3
     provider = _provider(args, cfg)
+    tui.echo(tui.banner())
+    tui.echo(tui.rule())
     vault = _vault(target, args)
     active = args.note or "BOOTSTRAP"
     assembler = ContextAssembler(vault, provider)
-    ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
-    persona = load_persona(target)
-    sys_prompt = persona.system_prompt()
-    joined = sys_prompt + "\n\n# Assembled context (link-walk):\n" + "\n---\n".join(
-        f"[[{n.stem}]] (score={n.score:.3f})\n{n.body}" for n in ctx
-    )
-    out = provider.complete(joined)
-    print(out)
+    tui.thinking(f"assembling context from [[{active}]]", seconds=0.9)
+    with tui.Spinner(f"consulting {provider.__class__.__name__}"):
+        ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
+        persona = load_persona(target)
+        sys_prompt = persona.system_prompt()
+        joined = sys_prompt + "\n\n# Assembled context (link-walk):\n" + "\n---\n".join(
+            f"[[{n.stem}]] (score={n.score:.3f})\n{n.body}" for n in ctx
+        )
+        out = provider.complete(joined)
+    tui.echo(tui.rule())
+    pal = tui._pal()
+    tui.echo(f"{pal['c']}{C_BRAIN} response{pal['reset']}")
+    tui.echo(out)
+    tui.echo(tui.rule())
+    return 0
+
+
+def cmd_tui(args, cfg) -> int:
+    target = args.target or cfg.get("target")
+    if not target or not os.path.isdir(target):
+        print("error: no valid --target (run `sigil hatch` first)", file=sys.stderr)
+        return 2
+    tui.echo(tui.banner())
+    tui.echo(tui.rule())
+    if auto.is_halted(target):
+        tui.note("agent halted — kill-switch active", "r")
+        return 3
+    vault = _vault(target, args)
+    with tui.Spinner("loading vault + link graph"):
+        assembler = ContextAssembler(vault, NullProvider())
+        active = args.note or "BOOTSTRAP"
+        ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
+    tui.note(f"active note: [[{active}]]  ·  {len(ctx)} notes in context", "c")
+    tui.echo(tui.rule())
+    tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
+                               "hop": n.hop, "source": n.source} for n in ctx]))
+    tui.echo(tui.rule())
+    tui.thinking("agent idle — edit notes to shift context", seconds=1.0)
+    tui.note("tip: `sigil chat --target <vault> --model <model>` to talk", "x")
     return 0
 
 
@@ -115,12 +154,15 @@ def cmd_walk(args, cfg) -> int:
         return 2
     vault = _vault(target, args)
     assembler = ContextAssembler(vault, NullProvider())
-    ctx = assembler.assemble(args.note, k=args.k, hops=args.hops, task_tag=args.task)
+    with tui.Spinner(f"walking link graph from [[{args.note}]]"):
+        ctx = assembler.assemble(args.note, k=args.k, hops=args.hops, task_tag=args.task)
+    tui.echo(tui.rule())
     if args.explain:
-        for n in ctx:
-            print(f"{n.stem:20s} score={n.score:.3f} hop={n.hop} src={n.source}")
+        tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
+                                   "hop": n.hop, "source": n.source} for n in ctx]))
     else:
-        print(", ".join(n.stem for n in ctx))
+        tui.echo("  " + tui._pal()["w"] + ", ".join(n.stem for n in ctx) + tui._pal()["reset"])
+    tui.echo(tui.rule())
     return 0
 
 
@@ -241,6 +283,16 @@ def build_parser() -> argparse.ArgumentParser:
     rn.add_argument("--target")
     rn.add_argument("--note", required=True)
     rn.set_defaults(func=cmd_run_note)
+
+    t = sub.add_parser("tui")
+    t.add_argument("--target")
+    t.add_argument("--note", default="BOOTSTRAP")
+    t.add_argument("--k", type=int, default=10)
+    t.add_argument("--hops", type=int, default=2)
+    t.add_argument("--task")
+    t.add_argument("--share", action="append", default=[],
+                   help="remote vault path to federate (repeatable)")
+    t.set_defaults(func=cmd_tui)
     return p
 
 

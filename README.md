@@ -110,10 +110,12 @@ commands
     sigil chat   --target DIR --note STEM [--model M] [--share REMOTE ...]
     sigil run    --target DIR [--daemon --interval N]   run due schedule jobs
     sigil run-note --target DIR --note STEM   execute ```run blocks if intent allows
+    sigil tui    --target DIR [--note STEM]   pretty banner + live context view
     sigil halt   --target DIR [--reason R]   write the kill-switch
 
 the cli remembers the last --target in ~/.sigil/config.json so you can
-omit it.
+omit it. all commands render a colored banner, spinner, and "thinking"
+animation on a real terminal, and fall back to plain text when piped.
 
 ==================================================
 
