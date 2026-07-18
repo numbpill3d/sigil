@@ -1,0 +1,27 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual env
+.venv/
+venv/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# SIGIL runtime artifacts
+.sigil/
+KILLSWITCH.md
+_proposal_*.md
+_conflict_log.md
+
+# Editor
+*.swp
+.idea/
+.vscode/
