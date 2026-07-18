@@ -21,7 +21,7 @@ from typing import Iterable
 
 from . import lock
 
-TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "..", "templates", "greenfield_vault")
+TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates", "greenfield_vault")
 
 # name-based excludes (substring match, case-insensitive)
 NAME_EXCLUDES = [".obsidian", "node_modules", ".git", ".trash", "templates"]

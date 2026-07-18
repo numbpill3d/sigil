@@ -189,7 +189,12 @@ def cmd_run(args, cfg) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sigil", description="vault-native agent")
-    p.add_argument("--version", action="version", version="sigil 1.6.0")
+    try:
+        from importlib.metadata import version as _v
+        _ver = _v("sigil")
+    except Exception:
+        _ver = "dev"
+    p.add_argument("--version", action="version", version=f"sigil {_ver}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     h = sub.add_parser("hatch")

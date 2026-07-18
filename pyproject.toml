@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sigil"
-version = "0.1.0"
+version = "1.6.1"
 description = "Vault-native semi-autonomous agent framework"
 requires-python = ">=3.11"
 dependencies = ["PyYAML>=6.0"]
@@ -15,6 +15,9 @@ sigil = "sigil.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["sigil*"]
+
+[tool.setuptools.package-data]
+sigil = ["templates/greenfield_vault/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
