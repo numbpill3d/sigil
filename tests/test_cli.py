@@ -1,0 +1,92 @@
+import sys, os, tempfile, shutil, subprocess, json
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+CLI = "-m sigil.cli"
+
+
+def _run(*args):
+    env = dict(os.environ)
+    env["HOME"] = tempfile.mkdtemp()  # isolate config
+    return subprocess.run(
+        [sys.executable, "-m", "sigil.cli", *args],
+        capture_output=True, text=True, env=env, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
+
+
+def test_cli_hatch_fresh_persists_config():
+    home = tempfile.mkdtemp()
+    d = tempfile.mkdtemp()
+    try:
+        env = dict(os.environ)
+        env["HOME"] = home
+        r = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "hatch", "--target", d, "--fresh"],
+            capture_output=True, text=True, env=env,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        assert r.returncode == 0, r.stderr
+        assert os.path.exists(os.path.join(d, "intent.md"))
+        # config persisted under isolated HOME
+        cfg_path = os.path.join(home, ".sigil", "config.json")
+        assert os.path.exists(cfg_path)
+        cfg = json.load(open(cfg_path))
+        assert cfg["target"] == os.path.realpath(d)
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.rmtree(home, ignore_errors=True)
+
+
+def test_cli_hatch_refuses_home():
+    # directly assert HatchError via the module for a home target
+    from sigil.hatch import hatch, HatchError
+    try:
+        hatch(os.path.expanduser("~"), "fresh")
+        assert False, "expected HatchError"
+    except HatchError:
+        pass
+
+
+def test_cli_walk_explain_runs():
+    d = tempfile.mkdtemp()
+    try:
+        _run("hatch", "--target", d, "--fresh")
+        r = _run("walk", "--target", d, "--note", "BOOTSTRAP", "--explain")
+        assert r.returncode == 0, r.stderr
+        assert "BOOTSTRAP" in r.stdout
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_halt_writes_killswitch():
+    d = tempfile.mkdtemp()
+    try:
+        _run("hatch", "--target", d, "--fresh")
+        r = _run("halt", "--target", d)
+        assert r.returncode == 0, r.stderr
+        assert os.path.exists(os.path.join(d, "KILLSWITCH.md"))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_chat_runs_with_null_provider():
+    d = tempfile.mkdtemp()
+    try:
+        # ensure NullProvider: no OPENROUTER_API_KEY, no --model
+        env = dict(os.environ)
+        env.pop("OPENROUTER_API_KEY", None)
+        env["HOME"] = tempfile.mkdtemp()
+        cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        # hatch first
+        h = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "hatch", "--target", d, "--fresh"],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        assert h.returncode == 0, h.stderr
+        r = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "chat", "--target", d, "--note", "BOOTSTRAP"],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        assert r.returncode == 0, r.stderr
+        assert "null-provider-echo" in r.stdout
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
