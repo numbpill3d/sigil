@@ -142,6 +142,9 @@ class Vault:
                 f for f in md_files
                 if self.graph.mtimes.get(f) != current_mtimes[f]
             ]
+            # files never seen before (new) are also "changed" -> add them
+            new_files = [f for f in md_files if f not in self.graph.mtimes]
+            changed.extend(new_files)
             removed = [f for f in self.graph.mtimes if f not in current_mtimes]
             for f in removed:
                 self.graph.drop(Path(f).stem)
