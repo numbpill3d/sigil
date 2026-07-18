@@ -56,6 +56,20 @@ def _provider(args, cfg) -> object:
     return NullProvider()
 
 
+def _vault(target, args):
+    """Build a Vault or FederatedVault (if --share given) and scan it."""
+    from . import federation as fedmod
+    v = Vault(target)
+    shares = getattr(args, "share", None) or []
+    if shares:
+        remotes = {os.path.basename(s.rstrip("/")): Vault(s) for s in shares}
+        fv = fedmod.FederatedVault(v, remotes)
+        fv.scan()
+        return fv
+    v.scan()
+    return v
+
+
 def cmd_hatch(args, cfg) -> int:
     target = args.target or cfg.get("target")
     if not target:
@@ -80,8 +94,7 @@ def cmd_chat(args, cfg) -> int:
         print("agent halted (kill-switch active). remove KILLSWITCH.md / intent status.", file=sys.stderr)
         return 3
     provider = _provider(args, cfg)
-    vault = Vault(target)
-    vault.scan()
+    vault = _vault(target, args)
     active = args.note or "BOOTSTRAP"
     assembler = ContextAssembler(vault, provider)
     ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
@@ -100,8 +113,7 @@ def cmd_walk(args, cfg) -> int:
     if not target or not os.path.isdir(target):
         print("error: no valid --target", file=sys.stderr)
         return 2
-    vault = Vault(target)
-    vault.scan()
+    vault = _vault(target, args)
     assembler = ContextAssembler(vault, NullProvider())
     ctx = assembler.assemble(args.note, k=args.k, hops=args.hops, task_tag=args.task)
     if args.explain:
@@ -164,6 +176,8 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--hops", type=int, default=2)
     c.add_argument("--task")
     c.add_argument("--model")
+    c.add_argument("--share", action="append", default=[],
+                   help="remote vault path to federate (repeatable)")
     c.set_defaults(func=cmd_chat)
 
     w = sub.add_parser("walk")
@@ -173,6 +187,8 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--hops", type=int, default=2)
     w.add_argument("--task")
     w.add_argument("--explain", action="store_true")
+    w.add_argument("--share", action="append", default=[],
+                   help="remote vault path to federate (repeatable)")
     w.set_defaults(func=cmd_walk)
 
     k = sub.add_parser("halt")

@@ -61,6 +61,7 @@ class LinkGraph:
     backedges: dict[str, list[str]] = field(default_factory=dict)
     mtimes: dict[str, float] = field(default_factory=dict)
     revision: int = 0
+    remote_of: dict[str, str] = field(default_factory=dict)  # stem -> remote name
 
     def add(self, note: Note) -> None:
         self.notes[note.stem] = note
