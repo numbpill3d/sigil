@@ -148,3 +148,37 @@ def test_cli_run_daemon_flag_accepted():
         assert proc.returncode == 0
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_run_note_refused_without_intent_run():
+    d = tempfile.mkdtemp()
+    try:
+        _run("hatch", "--target", d, "--fresh")
+        # write a note with a run block that would create a side-effect file
+        with open(os.path.join(d, "script.md"), "w", encoding="utf-8") as fh:
+            fh.write("# script\n\n```run\ntouch sidefile\n```\n")
+        r = _run("run-note", "--target", d, "--note", "script")
+        assert r.returncode == 0, r.stderr
+        # not executed: side-effect file must NOT exist
+        assert not os.path.exists(os.path.join(d, "sidefile"))
+        assert "not allowed" in r.stdout
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_run_note_executes_when_intent_allows():
+    d = tempfile.mkdtemp()
+    try:
+        _run("hatch", "--target", d, "--fresh")
+        # opt in: add 'run' to intent.allowed
+        intent_path = os.path.join(d, "intent.md")
+        txt = open(intent_path, encoding="utf-8").read()
+        txt = txt.replace("allowed: [write, propose]", "allowed: [write, propose, run]")
+        open(intent_path, "w", encoding="utf-8").write(txt)
+        with open(os.path.join(d, "script.md"), "w", encoding="utf-8") as fh:
+            fh.write("# script\n\n```run\necho ran-ok\n```\n")
+        r = _run("run-note", "--target", d, "--note", "script")
+        assert r.returncode == 0, r.stderr
+        assert "ran-ok" in r.stdout
+    finally:
+        shutil.rmtree(d, ignore_errors=True)

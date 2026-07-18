@@ -124,6 +124,35 @@ def cmd_walk(args, cfg) -> int:
     return 0
 
 
+def cmd_run_note(args, cfg) -> int:
+    target = args.target or cfg.get("target")
+    if not target or not os.path.isdir(target):
+        print("error: no valid --target", file=sys.stderr)
+        return 2
+    if auto.is_halted(target):
+        print("agent halted (kill-switch active).", file=sys.stderr)
+        return 3
+    from . import runbook as runbookmod
+    note_path = os.path.join(target, args.note + ".md")
+    if not os.path.exists(note_path):
+        print(f"error: note {args.note}.md not found", file=sys.stderr)
+        return 2
+    intent = auto.load_intent(target)
+    gate = auto.gate_from_intent(intent)
+    res = runbookmod.execute_run(note_path, intent, gate=gate)
+    if not res["allowed"]:
+        print("run not allowed by intent (add 'run' to intent.allowed to opt in).")
+        print("--- blocks surfaced as data ---")
+        for b in runbookmod.extract_run_blocks(open(note_path, encoding="utf-8").read()):
+            print(b)
+        return 0
+    for o in res["outputs"]:
+        print(o)
+    if res["errors"]:
+        print("errors:", "; ".join(res["errors"]), file=sys.stderr)
+    return 0
+
+
 def cmd_halt(args, cfg) -> int:
     target = args.target or cfg.get("target")
     if not target:
@@ -201,6 +230,11 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--daemon", action="store_true")
     r.add_argument("--interval", type=float, default=1.0)
     r.set_defaults(func=cmd_run)
+
+    rn = sub.add_parser("run-note")
+    rn.add_argument("--target")
+    rn.add_argument("--note", required=True)
+    rn.set_defaults(func=cmd_run_note)
     return p
 
 
