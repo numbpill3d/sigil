@@ -1,70 +1,188 @@
-# SIGIL
+sigil — vault-native semi-autonomous agent framework
+==================================================
 
-> vault-native semi-autonomous agent framework
+sigil is an agent framework whose memory is a plain obsidian / markdown
+vault — not a vector database. the agent's "mind" is the link graph of
+your notes. you edit notes, add `[[wikilinks]]`, and the agent's context
+changes. no retraining, no embedding store, no black box.
 
-SIGIL's memory substrate is an Obsidian/markdown vault — not a vector DB, not
-RAG. The agent "thinks" by walking `[[wikilinks]]` through the vault graph
-(link-walk context assembly), and every belief is provenance-stamped,
-decay-aged, and conflict-resolved by trust tier. The vault is also the
-autonomy control surface: `intent.md` gates every write, proposals require
-human approval, and a markdown edit stops the agent.
+instead of rag, sigil assembles prompt context by walking the vault's
+link graph from the active note (bfs up to N hops, scored by recency,
+proximity, decay, and tag match), trimmed to a token budget. it is
+transparent: you can see exactly why a note was included.
 
-## Why
+==================================================
 
-See [docs/WHY-NOT-RAG.md](docs/WHY-NOT-RAG.md). Short version: memory you can
-read, edit, audit, and trust — instead of a bag of embeddings you can't argue
-with.
+why not rag
+-----------
 
-## Install (dev)
+- rag hides the reasoning. sigil shows the path.
+- rag needs an embedding pipeline + vector store. sigil needs a folder
+  of .md files.
+- rag drifts; you can't see what the model "remembers". sigil's memory
+  is the notes you wrote, editable in obsidian.
+- the vault IS the audit trail. every belief is a note. tombstone it and
+  it stops surfacing.
 
-    cd ~/sigil
-    python3 -m venv .venv
-    . .venv/bin/activate
+==================================================
+
+install
+-------
+
+sigil is pure python (>=3.11) and ships as a wheel. pipx keeps it
+isolated from your system python:
+
+    pipx install git+https://github.com/numbpill3d/sigil.git
+
+or from a local checkout:
+
+    cd sigil
+    pipx install .
+
+or plain pip into a venv:
+
+    pip install /path/to/sigil/dist/sigil-1.6.2-py3-none-any.whl
+
+or editable from source:
+
     pip install -e .
-    pip install pytest
-    pytest -q          # 79 tests, all green
 
-## Quick start
+after install, `sigil` is on your path:
 
-    sigil hatch --target /tmp/my-agent --fresh       # greenfield vault
-    sigil hatch --target /tmp/notes    --adopt       # adopt a tree (secrets filtered)
-    sigil walk  --target /tmp/my-agent --note BOOTSTRAP --explain   # inspect context
-    sigil chat  --target /tmp/my-agent --note BOOTSTRAP            # run provider
-    sigil halt  --target /tmp/my-agent                            # kill-switch
+    sigil --version
 
-Defaults to `NullProvider` (deterministic echo, no tokens). Set
-`OPENROUTER_API_KEY` + `--model openai/gpt-4o-mini` for a real model.
+==================================================
 
-## Docs
+hatch a vault
+-------------
 
-- [docs/QUICKSTART.md](docs/QUICKSTART.md) — install, hatch, chat, walk, halt
-- [docs/CONCEPTS.md](docs/CONCEPTS.md) — notes, link-walk, provenance, conflict, persona, autonomy
-- [docs/WHY-NOT-RAG.md](docs/WHY-NOT-RAG.md) — design rationale vs RAG
+two modes.
 
-## Modules
+adopt an existing obsidian vault (turns your notes into agent memory):
 
-    sigil/frontmatter.py   YAML frontmatter parse/emit (PyYAML)
-    sigil/vault.py         scan -> LinkGraph, path confinement, incremental index
-    sigil/provider.py      ModelProvider (Null + OpenRouter)
-    sigil/lock.py          atomic write + fcntl + intent allowlist gate
-    sigil/hatch.py         GERMINATE / INCUBATE + secret filter
-    sigil/context.py       ContextAssembler (link-walk + decay + cache + token cap)
-    sigil/provenance.py    per-write provenance stamp
-    sigil/conflict.py      claim conflict protocol (human>agent>ingested)
-    sigil/persona.py       persona synthesis from persona.md
-    sigil/autonomy.py      intent gate, tiers, proposal/approval, kill-switch
-    sigil/cli.py           hatch / chat / walk / halt
+    sigil hatch --target ~/vaults/notes --adopt
 
-## Status
+germinate a fresh greenfield brain:
 
-v1 complete: the 6 features (link-walk, decay, conflict, persona, provenance,
-loose-incubate) + 3 architecture must-haves (incremental scan, context cache,
-write lock) + autonomy scaffold + security basics. Phase 2 (deferred, see
-plan): daemon heartbeat loop, `delegate` tier + sandbox, federation `share:`,
-executable `run` notes (sandboxed), drift detection, fsnotify inbox.
+    sigil hatch --target ~/vaults/sigil-brain --fresh
 
-## Safety
+both refuse to hatch `~` or `/` (safety). adopt scans file contents for
+secret patterns (sk-, AKIA..., ghp_..., private keys) and excludes them —
+reported, never ingested.
 
-SIGIL never walks `~`. Hatch refuses home/root targets. Ingested markdown is
-untrusted data — ```` ```run ```` blocks are surfaced as text, never executed.
-The intent gate is a code-level allowlist enforced in the write path.
+![hatch](docs/assets/shot_hatch.png)
+
+==================================================
+
+walk the mind
+-------------
+
+see what context the agent would assemble, with no model needed:
+
+    sigil walk --target ~/vaults/sigil-brain --note BOOTSTRAP --explain
+
+![walk](docs/assets/shot_walk.png)
+
+==================================================
+
+chat through the vault
+----------------------
+
+wire a real model via openrouter (set the key, or pass --model):
+
+    export OPENROUTER_API_KEY=your-key
+    sigil chat --target ~/vaults/sigil-brain --note BOOTSTRAP --model anthropic/claude-3.5-sonnet
+
+without a key it falls back to the null provider, which echoes the
+assembled persona + context so you can inspect the pipeline:
+
+    sigil chat --target ~/vaults/sigil-brain --note BOOTSTRAP
+
+![chat](docs/assets/shot_chat.png)
+
+==================================================
+
+commands
+--------
+
+    sigil hatch  --target DIR (--fresh | --adopt)   create or adopt a vault
+    sigil walk   --target DIR --note STEM [--explain]   show link-walk context
+    sigil chat   --target DIR --note STEM [--model M] [--share REMOTE ...]
+    sigil run    --target DIR [--daemon --interval N]   run due schedule jobs
+    sigil run-note --target DIR --note STEM   execute ```run blocks if intent allows
+    sigil halt   --target DIR [--reason R]   write the kill-switch
+
+the cli remembers the last --target in ~/.sigil/config.json so you can
+omit it.
+
+==================================================
+
+the autonomy contract
+---------------------
+
+intent.md is a code-level allowlist, reloaded every loop and before every
+write. edit it to change the agent's mandate live.
+
+- `allowed:` lists what it may do. add `run` to execute code blocks,
+  `delegate` to spawn confined sub-agents (requires the sandbox boundary).
+- `autonomy:` is `ask` (confirm everything) | `act` (execute within
+  allowed) | `delegate` (spawn sub-agents; fail-closed without opt-in).
+- `confidence < 0.6` forces `ask` regardless.
+
+kill-switch: drop a KILLSWITCH.md or set intent `status: halted` and the
+agent stops. `sigil halt --target DIR` writes it for you.
+
+==================================================
+
+federation
+----------
+
+a note may declare `share: [other-vault]` in frontmatter, letting its
+`[[links]]` resolve into a named remote vault's graph. each remote is
+confined to its own root — cross-vault resolution can never escape.
+
+    sigil chat --target ~/vaults/sigil-brain --note BOOTSTRAP --share ~/vaults/team
+
+==================================================
+
+features
+--------
+
+- link-walk context assembly (bfs + scoring + token budget)
+- deliberate decay + tombstoning (`[[grave]]` stops auto-surfacing)
+- conflict protocol (beliefs stamped `claim:` are protected)
+- persona synthesis + drift detection (watched every scan)
+- provenance ledger (every write is attributable)
+- loose incubate (any markdown tree; .obsidian optional)
+- fsnotify vault watcher (daemon reacts to edits, not interval polls)
+- sandboxed `run` notes (opt-in, confined subprocess, fail-closed)
+- delegate tier + sandbox boundary (sub-agents confined to delegates/)
+
+==================================================
+
+security
+--------
+
+- all `[[link]]` resolution is confined to the vault root; `..` and
+  symlink escapes raise PathEscapeError.
+- all agent writes route through the intent gate (lock.atomic_write).
+- hatch refuses home/root targets; never walks `~`.
+- delegate writes are confined to `<vault>/delegates/`; escape -> rejected.
+- run notes execute with no shell, a timeout, and no vault-write access.
+
+==================================================
+
+dev
+---
+
+    cd sigil
+    python -m venv .venv && . .venv/bin/activate
+    pip install -e ".[dev]"   # or: pip install pyyaml pytest
+    python -m pytest
+
+==================================================
+
+license
+-------
+
+mit
