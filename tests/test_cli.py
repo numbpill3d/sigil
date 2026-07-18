@@ -90,3 +90,61 @@ def test_cli_chat_runs_with_null_provider():
         assert "null-provider-echo" in r.stdout
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_run_oneshot_creates_due_note():
+    d = tempfile.mkdtemp()
+    try:
+        env = dict(os.environ)
+        env["HOME"] = tempfile.mkdtemp()
+        cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        h = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "hatch", "--target", d, "--fresh"],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        assert h.returncode == 0, h.stderr
+        # write an always-due schedule line
+        with open(os.path.join(d, "schedule.md"), "w", encoding="utf-8") as fh:
+            fh.write("* * * * * | tick-note\n")
+        r = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "run", "--target", d],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        assert r.returncode == 0, r.stderr
+        assert "tick-note" in r.stdout
+        assert os.path.exists(os.path.join(d, "tick-note.md"))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_cli_run_daemon_flag_accepted():
+    d = tempfile.mkdtemp()
+    try:
+        env = dict(os.environ)
+        env["HOME"] = tempfile.mkdtemp()
+        cwd = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        h = subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "hatch", "--target", d, "--fresh"],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        assert h.returncode == 0, h.stderr
+        # run daemon with a short interval; it should start then we halt it
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "sigil.cli", "run", "--target", d, "--daemon", "--interval", "0.01"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, cwd=cwd,
+        )
+        import time as _t
+        _t.sleep(0.2)
+        # halt via KILLSWITCH -> daemon should exit
+        subprocess.run(
+            [sys.executable, "-m", "sigil.cli", "halt", "--target", d],
+            capture_output=True, text=True, env=env, cwd=cwd,
+        )
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            assert False, "daemon did not stop on kill-switch"
+        assert proc.returncode == 0
+    finally:
+        shutil.rmtree(d, ignore_errors=True)

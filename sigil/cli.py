@@ -28,6 +28,7 @@ from .provider import NullProvider, OpenRouterProvider
 from .context import ContextAssembler
 from .persona import load_persona
 from . import autonomy as auto
+from . import daemon as daemonmod
 
 CONFIG_PATH = os.path.expanduser("~/.sigil/config.json")
 
@@ -121,6 +122,30 @@ def cmd_halt(args, cfg) -> int:
     return 0
 
 
+def cmd_run(args, cfg) -> int:
+    target = args.target or cfg.get("target")
+    if not target or not os.path.isdir(target):
+        print("error: no valid --target", file=sys.stderr)
+        return 2
+    if auto.is_halted(target):
+        print("agent halted (kill-switch active). remove KILLSWITCH.md / intent status.", file=sys.stderr)
+        return 3
+    if args.daemon:
+        import threading
+        stop = threading.Event()
+        print(f"daemon running on {target} (interval {args.interval}s). ctrl-c to stop.")
+        try:
+            daemonmod.run_daemon(target, interval=args.interval, stop_event=stop)
+        except KeyboardInterrupt:
+            stop.set()
+        return 0
+    # one-shot: run due jobs now
+    results = daemonmod.run_due_jobs(target)
+    for r in results:
+        print(f"{r['target']}: {r['result']}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sigil", description="vault-native agent")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -154,6 +179,12 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--target")
     k.add_argument("--reason", default="")
     k.set_defaults(func=cmd_halt)
+
+    r = sub.add_parser("run")
+    r.add_argument("--target")
+    r.add_argument("--daemon", action="store_true")
+    r.add_argument("--interval", type=float, default=1.0)
+    r.set_defaults(func=cmd_run)
     return p
 
 
