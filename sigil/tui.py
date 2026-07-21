@@ -222,7 +222,7 @@ def walk_table(rows: list) -> str:
     pal = _pal()
     if not rows:
         return f"{pal['x']}{C.DIM}  (no notes reached){C.RESET}\n"
-    head = f"  {pal['x']}{C.DIM}{'note'.ljust(20)} {'score'.rjust(7)} {'hop'.rjust(4)} {'source'.rjust(7)} {'via'.ljust(10)} {'parent'.ljust(24)}{C.RESET}\n"
+    head = f"  {pal['x']}{C.DIM}{'note'.ljust(28)} {'score'.rjust(7)} {'hop'.rjust(4)} {'source'.rjust(7)} {'via'.ljust(10)} {'parent'.ljust(24)}{C.RESET}\n"
     body = []
     for r in rows:
         score = float(r.get("score", 0.0))
@@ -233,7 +233,7 @@ def walk_table(rows: list) -> str:
         via = str(r.get("via", "root"))[:10].ljust(10)
         parent = str(r.get("parent") if r.get("parent") is not None else "-")[:24].ljust(24)
         body.append(
-            f"  {pal['w']}{str(r.get('stem',''))[:20].ljust(20)} "
+            f"  {pal['w']}{str(r.get('label', r.get('stem','')))[:28].ljust(28)} "
             f"{pal['b']}{scol}{f'{score:.3f}'.rjust(7)} "
             f"{pal['x']}{str(r.get('hop','0')).rjust(4)} "
             f"{pal['b']}{srccol}{src.rjust(7)}{pal['reset']} "

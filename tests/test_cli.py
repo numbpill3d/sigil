@@ -50,10 +50,14 @@ def test_cli_walk_explain_runs():
     d = tempfile.mkdtemp()
     try:
         _run("hatch", "--target", d, "--fresh")
+        os.makedirs(os.path.join(d, "projects"), exist_ok=True)
+        with open(os.path.join(d, "projects", "sigil.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\ntitle: sigil\nsource: human\n---\nbacklinks into [[BOOTSTRAP]]\n")
         r = _run("walk", "--target", d, "--note", "BOOTSTRAP", "--explain")
         assert r.returncode == 0, r.stderr
         assert "BOOTSTRAP" in r.stdout
         assert "via" in r.stdout and "parent" in r.stdout
+        assert "projects/sigil" in r.stdout
     finally:
         shutil.rmtree(d, ignore_errors=True)
 

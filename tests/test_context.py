@@ -157,3 +157,22 @@ def test_provenance_tracks_forward_and_backlink_parent():
         assert by_stem["back"].parent == "boot"
     finally:
         shutil.rmtree(d)
+
+
+def test_scored_note_carries_path_aware_label_for_nested_notes():
+    d = tempfile.mkdtemp()
+    try:
+        now = time.time()
+        os.makedirs(os.path.join(d, "projects"), exist_ok=True)
+        _write(d, "boot.md", f"---\ncreated: {now}\n---\nforward [[moc]]\n")
+        _write(d, "moc.md", f"---\ncreated: {now}\n---\nbody\n")
+        _write(os.path.join(d, "projects"), "sigil.md", f"---\ncreated: {now}\n---\nbacklinks into [[boot]]\n")
+        v = Vault(d)
+        v.scan()
+        ca = ContextAssembler(v, NullProvider())
+        res = ca.assemble("boot")
+        by_stem = {r.stem: r for r in res}
+        assert by_stem["boot"].label == "boot"
+        assert by_stem["sigil"].label == "projects/sigil"
+    finally:
+        shutil.rmtree(d)

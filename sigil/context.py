@@ -51,6 +51,7 @@ def _note_created_desc(vault, stem) -> float:
 @dataclass
 class ScoredNote:
     stem: str
+    label: str
     title: str
     body: str
     score: float
@@ -66,6 +67,18 @@ class ContextAssembler:
         self.vault = vault
         self.provider = provider
         self._cache = cache if cache is not None else {}
+
+    def _label_for_stem(self, stem: str) -> str:
+        note = self.vault.graph.notes.get(stem)
+        if note is None:
+            return stem
+        rel = note.path
+        try:
+            import os
+            rel = os.path.relpath(note.path, self.vault.root)
+        except Exception:
+            return stem
+        return rel[:-3] if rel.endswith('.md') else rel
 
     # ---- decay ------------------------------------------------------------
     @staticmethod
@@ -131,7 +144,7 @@ class ContextAssembler:
             raw = W_RECENCY * recency + W_PROXIMITY * proximity + W_DECAY * decay
             score = raw * tagmatch
             scored.append(
-                ScoredNote(stem=stem, title=note.title, body=note.body,
+                ScoredNote(stem=stem, label=self._label_for_stem(stem), title=note.title, body=note.body,
                            score=score, hop=hop, source=note.source, status=note.status,
                            via=via_map.get(stem, "root"), parent=parents.get(stem))
             )

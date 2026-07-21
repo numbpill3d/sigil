@@ -139,7 +139,7 @@ def cmd_tui(args, cfg) -> int:
         ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
     tui.note(f"active note: [[{active}]]  ·  {len(ctx)} notes in context", "c")
     tui.echo(tui.rule())
-    tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
+    tui.echo(tui.walk_table([{"stem": n.stem, "label": n.label, "score": n.score,
                                "hop": n.hop, "source": n.source,
                                "via": n.via, "parent": n.parent} for n in ctx]))
     tui.echo(tui.rule())
@@ -159,7 +159,7 @@ def cmd_walk(args, cfg) -> int:
         ctx = assembler.assemble(args.note, k=args.k, hops=args.hops, task_tag=args.task)
     tui.echo(tui.rule())
     if args.explain:
-        tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
+        tui.echo(tui.walk_table([{"stem": n.stem, "label": n.label, "score": n.score,
                                    "hop": n.hop, "source": n.source,
                                    "via": n.via, "parent": n.parent} for n in ctx]))
     else:
