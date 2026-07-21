@@ -134,3 +134,26 @@ def test_token_cap_trims():
         assert total <= 200 + 50  # within budget (+slack for first pick)
     finally:
         shutil.rmtree(d)
+
+
+def test_provenance_tracks_forward_and_backlink_parent():
+    d = tempfile.mkdtemp()
+    try:
+        now = time.time()
+        _write(d, "boot.md", f"---\ncreated: {now}\n---\nforward [[moc]]\n")
+        _write(d, "moc.md", f"---\ncreated: {now}\n---\nlinks [[boot]] [[child]]\n")
+        _write(d, "child.md", f"---\ncreated: {now}\n---\nchild body\n")
+        _write(d, "back.md", f"---\ncreated: {now}\n---\npoints back [[boot]]\n")
+        v = Vault(d)
+        v.scan()
+        ca = ContextAssembler(v, NullProvider())
+        res = ca.assemble("boot")
+        by_stem = {r.stem: r for r in res}
+        assert by_stem["boot"].via == "root"
+        assert by_stem["boot"].parent is None
+        assert by_stem["moc"].via == "forward"
+        assert by_stem["moc"].parent == "boot"
+        assert by_stem["back"].via == "backlink"
+        assert by_stem["back"].parent == "boot"
+    finally:
+        shutil.rmtree(d)

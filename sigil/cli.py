@@ -140,7 +140,8 @@ def cmd_tui(args, cfg) -> int:
     tui.note(f"active note: [[{active}]]  ·  {len(ctx)} notes in context", "c")
     tui.echo(tui.rule())
     tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
-                               "hop": n.hop, "source": n.source} for n in ctx]))
+                               "hop": n.hop, "source": n.source,
+                               "via": n.via, "parent": n.parent} for n in ctx]))
     tui.echo(tui.rule())
     tui.thinking("agent idle — edit notes to shift context", seconds=1.0)
     tui.note("tip: `sigil chat --target <vault> --model <model>` to talk", "x")
@@ -159,7 +160,8 @@ def cmd_walk(args, cfg) -> int:
     tui.echo(tui.rule())
     if args.explain:
         tui.echo(tui.walk_table([{"stem": n.stem, "score": n.score,
-                                   "hop": n.hop, "source": n.source} for n in ctx]))
+                                   "hop": n.hop, "source": n.source,
+                                   "via": n.via, "parent": n.parent} for n in ctx]))
     else:
         tui.echo("  " + tui._pal()["w"] + ", ".join(n.stem for n in ctx) + tui._pal()["reset"])
     tui.echo(tui.rule())

@@ -57,6 +57,8 @@ class ScoredNote:
     hop: int
     source: str = "agent"
     status: str = "live"
+    via: str = "root"
+    parent: Optional[str] = None
 
 
 class ContextAssembler:
@@ -89,17 +91,29 @@ class ContextAssembler:
 
         # BFS over the link graph (forward + backlinks), candidate-capped
         visited: dict[str, int] = {active_stem: 0}
+        parents: dict[str, Optional[str]] = {active_stem: None}
+        via_map: dict[str, str] = {active_stem: "root"}
         frontier = [active_stem]
         while frontier and len(visited) < CANDIDATE_CAP:
             cur = frontier.pop(0)
             cur_hop = visited[cur]
             if cur_hop >= hops:
                 continue
-            neighbors = set(self.vault.graph.edges.get(cur, []))
-            neighbors |= set(self.vault.graph.backedges.get(cur, []))
-            for nxt in neighbors:
+            neighbors: list[tuple[str, str]] = []
+            seen_here: set[str] = set()
+            for nxt in self.vault.graph.edges.get(cur, []):
+                if nxt not in seen_here:
+                    neighbors.append((nxt, "forward"))
+                    seen_here.add(nxt)
+            for nxt in self.vault.graph.backedges.get(cur, []):
+                if nxt not in seen_here:
+                    neighbors.append((nxt, "backlink"))
+                    seen_here.add(nxt)
+            for nxt, via in neighbors:
                 if nxt not in visited:
                     visited[nxt] = cur_hop + 1
+                    parents[nxt] = cur
+                    via_map[nxt] = via
                     frontier.append(nxt)
 
         scored: list[ScoredNote] = []
@@ -118,7 +132,8 @@ class ContextAssembler:
             score = raw * tagmatch
             scored.append(
                 ScoredNote(stem=stem, title=note.title, body=note.body,
-                           score=score, hop=hop, source=note.source, status=note.status)
+                           score=score, hop=hop, source=note.source, status=note.status,
+                           via=via_map.get(stem, "root"), parent=parents.get(stem))
             )
 
         # tie-break: created desc

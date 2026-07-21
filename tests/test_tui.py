@@ -31,10 +31,12 @@ def test_walk_table_empty():
 
 
 def test_walk_table_rows():
-    rows = [{"stem": "a", "score": 0.9, "hop": 0, "source": "human"},
-            {"stem": "b", "score": 0.4, "hop": 1, "source": "agent"}]
+    rows = [{"stem": "a", "score": 0.9, "hop": 0, "source": "human", "via": "root", "parent": "-"},
+            {"stem": "b", "score": 0.4, "hop": 1, "source": "agent", "via": "backlink", "parent": "a"}]
     out = T.walk_table(rows)
     assert "a" in out and "b" in out and "human" in out
+    assert "via" in out and "parent" in out
+    assert "backlink" in out
 
 
 def test_spinner_non_tty_no_crash(capsys, monkeypatch):

@@ -217,12 +217,12 @@ def note(msg: str, kind: str = "x") -> None:
 def walk_table(rows: list) -> str:
     """Pretty colored table for walk --explain output.
 
-    rows: list of dicts with stem, score, hop, source
+    rows: list of dicts with stem, score, hop, source, via, parent
     """
     pal = _pal()
     if not rows:
         return f"{pal['x']}{C.DIM}  (no notes reached){C.RESET}\n"
-    head = f"  {pal['x']}{C.DIM}{'note'.ljust(20)} {'score'.rjust(7)} {'hop'.rjust(4)} {'source'.rjust(7)}{C.RESET}\n"
+    head = f"  {pal['x']}{C.DIM}{'note'.ljust(20)} {'score'.rjust(7)} {'hop'.rjust(4)} {'source'.rjust(7)} {'via'.ljust(10)} {'parent'.ljust(24)}{C.RESET}\n"
     body = []
     for r in rows:
         score = float(r.get("score", 0.0))
@@ -230,11 +230,15 @@ def walk_table(rows: list) -> str:
         scol = GREEN if score >= 0.75 else (AMBER if score >= 0.5 else GREY)
         src = r.get("source", "agent")
         srccol = CYAN if src == "human" else VIOLET
+        via = str(r.get("via", "root"))[:10].ljust(10)
+        parent = str(r.get("parent") if r.get("parent") is not None else "-")[:24].ljust(24)
         body.append(
             f"  {pal['w']}{str(r.get('stem',''))[:20].ljust(20)} "
             f"{pal['b']}{scol}{f'{score:.3f}'.rjust(7)} "
             f"{pal['x']}{str(r.get('hop','0')).rjust(4)} "
-            f"{pal['b']}{srccol}{src.rjust(7)}{pal['reset']}"
+            f"{pal['b']}{srccol}{src.rjust(7)}{pal['reset']} "
+            f"{pal['x']}{via}{pal['reset']} "
+            f"{pal['x']}{parent}{pal['reset']}"
         )
     return head + "\n".join(body) + "\n"
 

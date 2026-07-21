@@ -53,6 +53,7 @@ def test_cli_walk_explain_runs():
         r = _run("walk", "--target", d, "--note", "BOOTSTRAP", "--explain")
         assert r.returncode == 0, r.stderr
         assert "BOOTSTRAP" in r.stdout
+        assert "via" in r.stdout and "parent" in r.stdout
     finally:
         shutil.rmtree(d, ignore_errors=True)
 
