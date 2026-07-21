@@ -78,6 +78,17 @@ def test_hatch_refuses_home():
         pass
 
 
+def test_hatch_allows_explicit_subdir_under_home():
+    root = tempfile.mkdtemp(dir=os.path.expanduser("~"), prefix="sigil-home-subdir-")
+    target = os.path.join(root, "brain")
+    try:
+        rep = hatch(target, "fresh")
+        assert rep["root"] == os.path.realpath(target)
+        assert os.path.exists(os.path.join(target, "BOOTSTRAP.md"))
+    finally:
+        shutil.rmtree(root)
+
+
 def test_looks_secret_heuristics():
     assert _looks_secret("key: sk-abcdefghijklmnopqrstuvwxyz12")
     assert _looks_secret("-----BEGIN RSA PRIVATE KEY-----")

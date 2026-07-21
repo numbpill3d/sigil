@@ -81,13 +81,13 @@ def _pal() -> dict:
 
 
 # ---- unusual hand-authored wordmark (not a default figlet font) ---------
-# slanted half-block style with a bracket frame. each line is pre-spaced.
-SIGIL_ART = r"""
- ___       _       _    ___ _
-/ __|  ___| |_ _ _(_)  / __| |_ _ _ ___ __ _ _ __
-\__ \ / -_)  _| '_| |  \__ \  _| '_/ -_) _` | '  \
-|___/ \___|\__|_| |_|  |___/\__|_| \___\__,_|_|_|_|
-"""
+# explicit ascii letters so the banner unmistakably reads "sigil".
+SIGIL_ART = r"""SIGIL
+  sss   iii   ggg  iii  l
+ ss       i  g       i  l
+  sss     i  g  gg   i  l
+    ss    i  g   g   i  l
+ ssss    iii  gggg  iii llll"""
 
 
 def banner(subtitle: str = "vault-native agent") -> str:

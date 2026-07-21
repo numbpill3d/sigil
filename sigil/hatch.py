@@ -62,7 +62,7 @@ def _looks_secret(text: str) -> bool:
 def _refuse_home(target: str) -> None:
     real = os.path.realpath(target)
     home = os.path.realpath(os.path.expanduser("~"))
-    if real == home or real == "/" or real.startswith(home + os.sep):
+    if real == home or real == "/":
         raise HatchError(f"refusing to hatch home/root path: {target}")
 
 
