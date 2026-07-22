@@ -176,3 +176,26 @@ def test_scored_note_carries_path_aware_label_for_nested_notes():
         assert by_stem["sigil"].label == "projects/sigil"
     finally:
         shutil.rmtree(d)
+
+
+def test_assemble_can_target_nested_note_path_when_duplicate_stems_exist():
+    d = tempfile.mkdtemp()
+    try:
+        now = time.time()
+        os.makedirs(os.path.join(d, "projects"), exist_ok=True)
+        os.makedirs(os.path.join(d, "archive"), exist_ok=True)
+        _write(d, "boot.md", f"---\ncreated: {now}\n---\nroot [[projects/foo]] [[archive/foo]]\n")
+        _write(os.path.join(d, "projects"), "foo.md", f"---\ncreated: {now}\n---\nproject backlinks [[boot]]\n")
+        _write(os.path.join(d, "archive"), "foo.md", f"---\ncreated: {now}\n---\narchive backlinks [[boot]]\n")
+        v = Vault(d)
+        v.scan()
+        ca = ContextAssembler(v, NullProvider())
+        res = ca.assemble("projects/foo")
+        labels = [r.label for r in res]
+        assert "projects/foo" in labels
+        assert "archive/foo" in labels
+        proj = next(r for r in res if r.label == "projects/foo")
+        assert proj.label == "projects/foo"
+        assert proj.stem == "foo"
+    finally:
+        shutil.rmtree(d)

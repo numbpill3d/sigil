@@ -5,14 +5,6 @@ Subcommands:
   chat  --target DIR [--note STEM]         assemble context + run provider
   walk  --target DIR --note STEM [--explain]   show link-walk context
   halt  --target DIR                        write KILLSWITCH.md
-
-Config (~/.sigil/config): remembers the last --target so you can omit it.
-Provider defaults to NullProvider (no tokens); set OPENROUTER_API_KEY +
---model to use OpenRouter.
-
-The CLI never walks ~/ : every --target is refused if it resolves to home
-(see sigil.hatch.HatchError). All writes route through sigil.lock so the
-intent gate applies.
 """
 
 from __future__ import annotations
@@ -32,7 +24,6 @@ from . import daemon as daemonmod
 from . import tui as tui
 
 CONFIG_PATH = os.path.expanduser("~/.sigil/config.json")
-
 C_BRAIN = "▰"
 
 
@@ -60,7 +51,6 @@ def _provider(args, cfg) -> ModelProvider:
 
 
 def _vault(target, args):
-    """Build a Vault or FederatedVault (if --share given) and scan it."""
     from . import federation as fedmod
     v = Vault(target)
     shares = getattr(args, "share", None) or []
@@ -71,6 +61,11 @@ def _vault(target, args):
         return fv
     v.scan()
     return v
+
+
+def _resolve_note_or_error(vault, raw_note: str):
+    key = vault.resolve_note_key(raw_note) if hasattr(vault, "resolve_note_key") else raw_note
+    return key
 
 
 def cmd_hatch(args, cfg) -> int:
@@ -103,15 +98,19 @@ def cmd_chat(args, cfg) -> int:
     tui.echo(tui.banner())
     tui.echo(tui.rule())
     vault = _vault(target, args)
-    active = args.note or "BOOTSTRAP"
+    active_raw = args.note or "BOOTSTRAP"
+    active = _resolve_note_or_error(vault, active_raw)
+    if not active:
+        print(f"error: note {active_raw} not found", file=sys.stderr)
+        return 2
     assembler = ContextAssembler(vault, provider)
-    tui.thinking(f"assembling context from [[{active}]]", seconds=0.9)
+    tui.thinking(f"assembling context from [[{active_raw}]]", seconds=0.9)
     with tui.Spinner(f"consulting {provider.__class__.__name__}"):
         ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
         persona = load_persona(target)
         sys_prompt = persona.system_prompt()
         joined = sys_prompt + "\n\n# Assembled context (link-walk):\n" + "\n---\n".join(
-            f"[[{n.stem}]] (score={n.score:.3f})\n{n.body}" for n in ctx
+            f"[[{n.label}]] (score={n.score:.3f})\n{n.body}" for n in ctx
         )
         out = provider.complete(joined)
     tui.echo(tui.rule())
@@ -133,11 +132,15 @@ def cmd_tui(args, cfg) -> int:
         tui.note("agent halted — kill-switch active", "r")
         return 3
     vault = _vault(target, args)
+    active_raw = args.note or "BOOTSTRAP"
+    active = _resolve_note_or_error(vault, active_raw)
+    if not active:
+        print(f"error: note {active_raw} not found", file=sys.stderr)
+        return 2
     with tui.Spinner("loading vault + link graph"):
         assembler = ContextAssembler(vault, NullProvider())
-        active = args.note or "BOOTSTRAP"
         ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
-    tui.note(f"active note: [[{active}]]  ·  {len(ctx)} notes in context", "c")
+    tui.note(f"active note: [[{active_raw}]]  ·  {len(ctx)} notes in context", "c")
     tui.echo(tui.rule())
     tui.echo(tui.walk_table([{"stem": n.stem, "label": n.label, "score": n.score,
                                "hop": n.hop, "source": n.source,
@@ -154,16 +157,20 @@ def cmd_walk(args, cfg) -> int:
         print("error: no valid --target", file=sys.stderr)
         return 2
     vault = _vault(target, args)
+    active = _resolve_note_or_error(vault, args.note)
+    if not active:
+        print(f"error: note {args.note} not found", file=sys.stderr)
+        return 2
     assembler = ContextAssembler(vault, NullProvider())
     with tui.Spinner(f"walking link graph from [[{args.note}]]"):
-        ctx = assembler.assemble(args.note, k=args.k, hops=args.hops, task_tag=args.task)
+        ctx = assembler.assemble(active, k=args.k, hops=args.hops, task_tag=args.task)
     tui.echo(tui.rule())
     if args.explain:
         tui.echo(tui.walk_table([{"stem": n.stem, "label": n.label, "score": n.score,
                                    "hop": n.hop, "source": n.source,
                                    "via": n.via, "parent": n.parent} for n in ctx]))
     else:
-        tui.echo("  " + tui._pal()["w"] + ", ".join(n.stem for n in ctx) + tui._pal()["reset"])
+        tui.echo("  " + tui._pal()["w"] + ", ".join(n.label for n in ctx) + tui._pal()["reset"])
     tui.echo(tui.rule())
     return 0
 
@@ -177,10 +184,12 @@ def cmd_run_note(args, cfg) -> int:
         print("agent halted (kill-switch active).", file=sys.stderr)
         return 3
     from . import runbook as runbookmod
-    note_path = os.path.join(target, args.note + ".md")
-    if not os.path.exists(note_path):
-        print(f"error: note {args.note}.md not found", file=sys.stderr)
+    vault = _vault(target, args)
+    note_key = _resolve_note_or_error(vault, args.note)
+    if not note_key or note_key not in vault.graph.notes:
+        print(f"error: note {args.note} not found", file=sys.stderr)
         return 2
+    note_path = vault.graph.notes[note_key].path
     intent = auto.load_intent(target)
     gate = auto.gate_from_intent(intent)
     res = runbookmod.execute_run(note_path, intent, gate=gate)
@@ -224,7 +233,6 @@ def cmd_run(args, cfg) -> int:
         except KeyboardInterrupt:
             stop.set()
         return 0
-    # one-shot: run due jobs now
     results = daemonmod.run_due_jobs(target)
     for r in results:
         print(f"{r['target']}: {r['result']}")
@@ -257,8 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--hops", type=int, default=2)
     c.add_argument("--task")
     c.add_argument("--model")
-    c.add_argument("--share", action="append", default=[],
-                   help="remote vault path to federate (repeatable)")
+    c.add_argument("--share", action="append", default=[], help="remote vault path to federate (repeatable)")
     c.set_defaults(func=cmd_chat)
 
     w = sub.add_parser("walk")
@@ -268,25 +275,8 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--hops", type=int, default=2)
     w.add_argument("--task")
     w.add_argument("--explain", action="store_true")
-    w.add_argument("--share", action="append", default=[],
-                   help="remote vault path to federate (repeatable)")
+    w.add_argument("--share", action="append", default=[], help="remote vault path to federate (repeatable)")
     w.set_defaults(func=cmd_walk)
-
-    k = sub.add_parser("halt")
-    k.add_argument("--target")
-    k.add_argument("--reason", default="")
-    k.set_defaults(func=cmd_halt)
-
-    r = sub.add_parser("run")
-    r.add_argument("--target")
-    r.add_argument("--daemon", action="store_true")
-    r.add_argument("--interval", type=float, default=1.0)
-    r.set_defaults(func=cmd_run)
-
-    rn = sub.add_parser("run-note")
-    rn.add_argument("--target")
-    rn.add_argument("--note", required=True)
-    rn.set_defaults(func=cmd_run_note)
 
     t = sub.add_parser("tui")
     t.add_argument("--target")
@@ -294,17 +284,32 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--k", type=int, default=10)
     t.add_argument("--hops", type=int, default=2)
     t.add_argument("--task")
-    t.add_argument("--share", action="append", default=[],
-                   help="remote vault path to federate (repeatable)")
+    t.add_argument("--share", action="append", default=[], help="remote vault path to federate (repeatable)")
     t.set_defaults(func=cmd_tui)
+
+    rn = sub.add_parser("run-note")
+    rn.add_argument("--target")
+    rn.add_argument("--note", required=True)
+    rn.set_defaults(func=cmd_run_note)
+
+    halt = sub.add_parser("halt")
+    halt.add_argument("--target")
+    halt.add_argument("--reason")
+    halt.set_defaults(func=cmd_halt)
+
+    run = sub.add_parser("run")
+    run.add_argument("--target")
+    run.add_argument("--daemon", action="store_true")
+    run.add_argument("--interval", type=float, default=30.0)
+    run.set_defaults(func=cmd_run)
     return p
 
 
 def main(argv=None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    p = build_parser()
+    args = p.parse_args(argv)
     if getattr(args, "ansi", False):
-        tui.FORCE_ANSI = True
+        os.environ["SIGIL_FORCE_ANSI"] = "1"
     cfg = _load_config()
     return args.func(args, cfg)
 

@@ -132,3 +132,21 @@ def test_incremental_scan_preserves_bodies():
         assert g2.notes["b"].body.strip() == "second note body"
     finally:
         shutil.rmtree(d)
+
+
+def test_duplicate_stems_in_different_folders_coexist_and_path_links_resolve():
+    d = tempfile.mkdtemp()
+    try:
+        os.makedirs(os.path.join(d, "projects"), exist_ok=True)
+        os.makedirs(os.path.join(d, "archive"), exist_ok=True)
+        _write(d, "boot.md", "---\ntitle: boot\n---\nsee [[projects/foo]] and [[archive/foo]]\n")
+        _write(os.path.join(d, "projects"), "foo.md", "---\ntitle: project foo\n---\nproject body\n")
+        _write(os.path.join(d, "archive"), "foo.md", "---\ntitle: archive foo\n---\narchive body\n")
+        v = Vault(d)
+        g = v.scan()
+        assert set(g.notes) == {"boot", "projects/foo", "archive/foo"}
+        assert g.edges["boot"] == ["projects/foo", "archive/foo"]
+        assert g.backedges["projects/foo"] == ["boot"]
+        assert g.backedges["archive/foo"] == ["boot"]
+    finally:
+        shutil.rmtree(d)

@@ -62,6 +62,20 @@ def test_cli_walk_explain_runs():
         shutil.rmtree(d, ignore_errors=True)
 
 
+def test_cli_walk_accepts_nested_note_path():
+    d = tempfile.mkdtemp()
+    try:
+        _run("hatch", "--target", d, "--fresh")
+        os.makedirs(os.path.join(d, "projects"), exist_ok=True)
+        with open(os.path.join(d, "projects", "sigil.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\ntitle: sigil\nsource: human\n---\nbacklinks into [[BOOTSTRAP]]\n")
+        r = _run("walk", "--target", d, "--note", "projects/sigil", "--explain")
+        assert r.returncode == 0, r.stderr
+        assert "projects/sigil" in r.stdout
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def test_cli_halt_writes_killswitch():
     d = tempfile.mkdtemp()
     try:
